@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
+import argparse
 import collections
 import contextlib
 import copy
-import optparse
 import os
 import subprocess
 import sys
@@ -84,45 +84,56 @@ def write_db(old_db, db):
             assert code == 0
 
 def main():
-    parser = optparse.OptionParser()
-    (options, args) = parser.parse_args()
+    parser = argparse.ArgumentParser()
+    subparser = parser.add_subparsers(title='subcommands', required=True)
+    def add_cmd(cmd, *args):
+        p = subparser.add_parser(cmd)
+        p.set_defaults(cmd=cmd)
+        for arg in args:
+            if isinstance(arg, dict):
+                p.add_argument(**arg)
+            else:
+                p.add_argument(arg)
 
-    (cmd, *args) = args
+    add_cmd('list')
+    add_cmd('add', 'alias', 'prefix', 'url',
+            {'dest': 'branch', 'default': 'master', 'nargs': '?'})
+    add_cmd('push', 'alias')
+    add_cmd('pull', 'alias')
+    add_cmd('split', 'alias')
+
+    args = parser.parse_args(sys.argv[1:])
 
     db = read_db()
     old_db = copy.deepcopy(db)
 
-    if cmd == 'list':
+    if args.cmd == 'list':
         for name, subtree in db['subtrees'].items():
             print('%s:' % name)
             for key, value in subtree.items():
                 print('    %s = %s' % (key, value))
 
     # Most commands need to autostash and cd to root
-    elif cmd in ('add', 'push', 'pull', 'split'):
+    elif args.cmd in ('add', 'push', 'pull', 'split'):
         cd_to_root()
         with autostash():
-            if cmd == 'add':
-                branch = 'master'
-                (name, prefix, url, *args) = args
-                if args:
-                    (branch,) = args
+            if args.cmd == 'add':
                 run(['git', 'subtree', 'add', '--squash',
-                    '--prefix', prefix, url, branch], check=True)
-                db['subtrees'].append({'name': name, 'prefix': prefix, 'url': url,
-                    'branch': branch})
-            else:
-                (name,) = args
-                subtree = db['subtrees'][name]
+                    '--prefix', args.prefix, args.url, args.branch], check=True)
+                assert args.alias not in db['subtrees']
+                db['subtrees'][args.alias] = {'prefix': args.prefix,
+                        'url': args.url, 'branch': args.branch}
 
-                if cmd in ('push', 'pull'):
-                    run(['git', 'subtree', cmd, '--squash',
-                        '--prefix', subtree['prefix'],
-                        subtree['url'], subtree['branch']], check=True)
+            elif args.cmd in ('push', 'pull'):
+                subtree = db['subtrees'][args.alias]
+                run(['git', 'subtree', args.cmd, '--squash',
+                    '--prefix', subtree['prefix'],
+                    subtree['url'], subtree['branch']], check=True)
 
-                elif cmd == 'split':
-                    run(['git', 'subtree', 'split', '--prefix', subtree['prefix']],
-                            check=True)
+            elif args.cmd == 'split':
+                subtree = db['subtrees'][args.alias]
+                run(['git', 'subtree', 'split', '--prefix', subtree['prefix']],
+                        check=True)
 
     else:
         assert False
