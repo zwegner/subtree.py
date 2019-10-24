@@ -63,7 +63,7 @@ def cd_to_root():
 
 def read_db():
     (code, out, err) = run('git config --get-regexp "subtree\\."')
-    assert code == 0
+    assert code == 0 or (out == b'' and err == b'')
     subtrees = collections.defaultdict(dict)
     for line in out.decode('utf-8').splitlines():
         key, value = line.split()
