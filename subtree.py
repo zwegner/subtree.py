@@ -75,7 +75,7 @@ def read_db():
 def write_db(old_db, db):
     for name, subtree in db['subtrees'].items():
         # Only write new/updated entries
-        if subtree == old_db.get(name):
+        if subtree == old_db['subtrees'].get(name):
             continue
 
         for key, value in subtree.items():
